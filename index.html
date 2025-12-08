@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Command Center</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Firebase Imports -->
+    <script type="module">
+        import * as firebase from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import * as auth from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import * as firestore from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Expose Firebase modules globally for the React script
+        window.firebase = {
+            initializeApp: firebase.initializeApp,
+            getAuth: auth.getAuth,
+            signInAnonymously: auth.signInAnonymously,
+            signInWithCustomToken: auth.signInWithCustomToken,
+            onAuthStateChanged: auth.onAuthStateChanged,
+            getFirestore: firestore.getFirestore,
+            doc: firestore.doc,
+            addDoc: firestore.addDoc,
+            deleteDoc: firestore.deleteDoc,
+            onSnapshot: firestore.onSnapshot,
+            collection: firestore.collection,
+            query: firestore.query,
+            setLogLevel: firestore.setLogLevel,
+            where: firestore.where,
+        };
+        // Set Firebase logging level to debug for development
+        firebase.setLogLevel('Debug');
+    </script>
+    
+    <!-- Google Fonts -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        
+        /* Animation Keyframes from Helper Code */
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-fade-in-up { animation: fade-in-up 0.5s ease-out; }
+        .animate-spin-slow { animation: spin-slow 8s linear infinite; }
+
+        /* Custom Message Box (Alerts/Errors) */
+        #message-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #ef4444;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 2000;
+            display: none;
+            text-align: center;
+        }
+        
+        /* Loading Spinner */
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Animation Modal Overlay Wrapper */
+        #onboarding-modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0,0,0,0.7);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- React Root -->
+    <div id="root"></div>
+
+    <!-- Onboarding Animation Container -->
+    <div id="onboarding-modal">
+        <div id="animation-container" class="bg-[#1a2233] rounded-2xl shadow-2xl p-8 w-full max-w-lg transition-all duration-700 ease-in-out relative overflow-hidden border border-gray-700">
+            <!-- Close X for quick exit -->
+            <button id="quick-exit" class="absolute top-4 right-4 text-gray-400 hover:text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+
+            <!-- Animated Content -->
+            <div id="animation-content" class="text-center transition-opacity duration-500">
+                <h2 id="animation-title" class="text-2xl sm:text-3xl font-bold text-[#ff9900] mb-4"></h2>
+                <p id="animation-text" class="text-gray-300 mb-8 h-20 overflow-y-auto sm:h-auto"></p>
+                <div id="animation-visual" class="relative w-full aspect-video bg-[#2c3d52] rounded-xl overflow-hidden transition-all duration-700 ease-in-out shadow-inner border border-gray-700">
+                    <!-- Visuals injected here -->
+                </div>
+                <div id="button-container" class="mt-8 flex justify-center space-x-4">
+                    <button id="next-button" class="px-6 py-3 bg-[#ff9900] text-[#1a2233] font-bold rounded-lg shadow-lg hover:bg-[#e68a00] transition-transform transform hover:scale-105">
+                        Next
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="message-box"></div>
+
+    <!-- Onboarding Script (Pure JS) -->
+    <script>
+        // Onboarding logic remains pure JS to run before React starts, showing on first load.
+        const titleEl = document.getElementById('animation-title');
+        const textEl = document.getElementById('animation-text');
+        const visualEl = document.getElementById('animation-visual');
+        const nextButton = document.getElementById('next-button');
+        const buttonContainer = document.getElementById('button-container');
+        const modal = document.getElementById('onboarding-modal');
+        const quickExit = document.getElementById('quick-exit');
+
+        const steps = [
+            {
+                title: "Your Financial Command Center",
+                text: "The new Business-Personal Expense-Revenue Tracker is here to help you manage your finances with ease and security using Google Firestore.",
+                visualHtml: `
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="w-4/5 h-4/5">
+                            <svg width="100%" height="100%" viewBox="0 0 540 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="30" y="30" width="480" height="300" rx="20" fill="#ff9900" stroke="#ffcc66" stroke-width="5"/>
+                                <path d="M70 70H470V280H70V70Z" fill="#2c3d52" stroke="#ffcc66" stroke-width="5"/>
+                                <rect x="40" y="270" width="460" height="60" rx="10" fill="#2c3d52"/>
+                                <circle cx="100" cy="280" r="10" fill="#ff9900"/>
+                                <rect x="120" y="275" width="300" height="10" rx="5" fill="#ff9900"/>
+                                <circle cx="440" cy="280" r="10" fill="#ff9900"/>
+                                <rect x="460" y="275" width="20" height="10" rx="5" fill="#ff9900"/>
+                            </svg>
+                        </div>
+                    </div>
+                `,
+            },
+            {
+                title: "1. Add a New Transaction",
+                text: "Fill out the simple form. The system intelligently suggests Business or Personal allocation based on the category you select.",
+                visualHtml: `
+                    <div class="absolute inset-4 p-4 bg-[#2c3d52] rounded-lg flex flex-col space-y-2 animate-fade-in-up">
+                        <input disabled type="date" class="p-2 border border-[#ff9900] rounded-md bg-[#1a2233] text-gray-500 opacity-70">
+                        <input disabled type="text" placeholder="Flight Instruction" class="p-2 border border-[#ff9900] rounded-md bg-[#1a2233] text-gray-300">
+                        <div class="flex space-x-2">
+                            <div class="p-2 border border-[#ff9900] rounded-md flex-1 bg-[#1a2233] text-gray-300 text-center text-sm">Revenue</div>
+                            <div class="p-2 border border-[#ff9900] rounded-md flex-1 bg-[#1a2233] text-gray-300 text-center text-sm">Business</div>
+                        </div>
+                    </div>
+                `,
+            },
+            {
+                title: "2. Real-Time Data & Persistence",
+                text: "Your data is saved instantly to your secure personal database using Firestore. It is never lost and always up-to-date across sessions.",
+                visualHtml: `
+                    <div class="absolute inset-4 flex flex-col items-center justify-center space-y-4">
+                        <div class="flex space-x-4">
+                            <div class="text-4xl text-blue-400 animate-fade-in-up">🔒</div>
+                            <div class="text-4xl text-green-400 animate-fade-in-up" style="animation-delay: 0.2s">☁️</div>
+                            <div class="text-4xl text-yellow-400 animate-fade-in-up" style="animation-delay: 0.4s">💾</div>
+                        </div>
+                        <p class="text-sm font-semibold text-gray-300">Private User Collection</p>
+                    </div>
+                `,
+            },
+            {
+                title: "3. Export Data for Tax Season",
+                text: "Easily export your filtered or complete data set to a CSV file with a single click for your accountant.",
+                visualHtml: `
+                    <div class="absolute inset-4 flex flex-col items-center justify-center space-y-4">
+                        <div class="text-6xl animate-bounce">📁</div>
+                        <p class="text-sm font-semibold text-gray-300">transactions.csv</p>
+                    </div>
+                `,
+            },
+            {
+                title: "Start Tracking Today!",
+                text: "Take control of your finances. Click 'Exit to App' to start using the command center.",
+                visualHtml: `
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <div class="relative w-20 h-20 mb-4 animate-spin-slow">
+                            <div class="absolute inset-0 border-4 border-[#ff9900] rounded-full border-t-transparent"></div>
+                            <div class="absolute inset-4 border-4 border-[#ffcc66] rounded-full border-t-transparent"></div>
+                            <div class="absolute inset-6 flex items-center justify-center text-3xl text-[#ff9900]">🚀</div>
+                        </div>
+                    </div>
+                `,
+            }
+        ];
+
+        let currentStep = 0;
+
+        function updateContent() {
+            const step = steps[currentStep];
+            titleEl.textContent = step.title;
+            textEl.textContent = step.text;
+            visualEl.innerHTML = step.visualHtml;
+
+            if (currentStep < steps.length - 1) {
+                nextButton.style.display = 'block';
+                nextButton.textContent = 'Next';
+                buttonContainer.innerHTML = '';
+                buttonContainer.appendChild(nextButton);
+            } else {
+                nextButton.style.display = 'none';
+                showFinalButtons();
+            }
+        }
+
+        function showFinalButtons() {
+            buttonContainer.innerHTML = ''; // clear
+            
+            const replayBtn = document.createElement('button');
+            replayBtn.id = 'replay-button';
+            replayBtn.className = "px-6 py-3 bg-[#ff9900] text-[#1a2233] font-semibold rounded-lg shadow-md hover:bg-[#e68a00] transition-colors";
+            replayBtn.textContent = "Replay";
+            replayBtn.onclick = () => {
+                currentStep = 0;
+                updateContent();
+            };
+
+            const exitBtn = document.createElement('button');
+            exitBtn.id = 'exit-button';
+            exitBtn.className = "px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors ml-4";
+            exitBtn.textContent = "Exit to App";
+            exitBtn.onclick = closeAnimation;
+
+            buttonContainer.appendChild(replayBtn);
+            buttonContainer.appendChild(exitBtn);
+        }
+
+        function closeAnimation() {
+            modal.style.opacity = '0';
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 500);
+        }
+
+        nextButton.addEventListener('click', () => {
+            currentStep++;
+            updateContent();
+        });
+        
+        quickExit.addEventListener('click', closeAnimation);
+
+        // Init
+        updateContent();
+    </script>
+
+    <!-- React Application Script (Babel) -->
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+        
+        // Helper to display messages/errors in the custom box
+        const showMessage = (message, isError = true) => {
+            const msgBox = document.getElementById('message-box');
+            msgBox.innerHTML = message;
+            msgBox.style.backgroundColor = isError ? '#ef4444' : '#10b981';
+            msgBox.style.display = 'block';
+            setTimeout(() => { msgBox.style.display = 'none'; }, 3000);
+        };
+
+        const App = () => {
+            // FIREBASE STATE
+            const [db, setDb] = useState(null);
+            const [auth, setAuth] = useState(null);
+            const [userId, setUserId] = useState(null);
+            const [isAuthReady, setIsAuthReady] = useState(false);
+            const [isLoading, setIsLoading] = useState(true);
+
+            // APP STATE
+            const [transactions, setTransactions] = useState([]);
+            const [formData, setFormData] = useState({
+                date: '',
+                description: '',
+                type: 'Expense',
+                category: '',
+                allocation: 'Business',
+                amount: '',
+                notes: '',
+            });
+            const [filters, setFilters] = useState({ type: '', allocation: '', searchTerm: '' });
+            const [sort] = useState({ key: 'date', direction: 'desc' });
+            const [summary, setSummary] = useState({
+                businessRevenue: 0, personalRevenue: 0, businessExpense: 0, personalExpense: 0,
+            });
+
+            // Transaction Categories Configuration
+            const categories = {
+                Expense: {
+                    Business: [
+                        'Meals (on layovers)', 'Ground Transport', 'Hotel / Lodging', 'Parking', 'Tips',
+                        'Equipment', 'Uniforms', 'Charts & Manuals', 'Software & Apps',
+                        'Dues & Subscriptions', 'Medical Certificate', 'Training', 'Licensing & Fees', 'Insurance',
+                        'Fuel', 'Maintenance', 'Hangar / Tiedown'
+                    ],
+                    Personal: [
+                        'Mortgage / Rent', 'Groceries', 'Dining Out', 'Utilities', 'Transportation', 'Health Insurance',
+                        'Entertainment', 'Savings', 'Debt Payment'
+                    ],
+                },
+                Revenue: {
+                    Business: [
+                        'Salary / Wages', 'Per Diem', 'Overtime Pay', 'Bonus', 'Flight Instruction', 'Contract Flying'
+                    ],
+                    Personal: [
+                        'Investment Income', 'Rental Income', 'Spouse Income', 'Other / Gift'
+                    ],
+                },
+            };
+
+            // 1. FIREBASE INITIALIZATION AND AUTHENTICATION
+            useEffect(() => {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+                if (Object.keys(firebaseConfig).length === 0 || !window.firebase) {
+                    showMessage("Firebase configuration missing. Data will not be saved.", true);
+                    setIsLoading(false);
+                    setIsAuthReady(true);
+                    return;
+                }
+
+                try {
+                    const app = window.firebase.initializeApp(firebaseConfig, appId);
+                    const authInstance = window.firebase.getAuth(app);
+                    const dbInstance = window.firebase.getFirestore(app);
+                    setAuth(authInstance);
+                    setDb(dbInstance);
+
+                    const signIn = async () => {
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await window.firebase.signInWithCustomToken(authInstance, __initial_auth_token);
+                            } else {
+                                await window.firebase.signInAnonymously(authInstance);
+                            }
+                        } catch (error) {
+                            console.error("Firebase Sign-In Error:", error);
+                            showMessage(`Authentication failed: ${error.message}`, true);
+                        }
+                    };
+
+                    const unsubscribe = window.firebase.onAuthStateChanged(authInstance, (user) => {
+                        if (user) {
+                            setUserId(user.uid);
+                        } else {
+                            // If user is null after sign-in attempt, use a random ID as fallback
+                            setUserId(crypto.randomUUID());
+                        }
+                        setIsAuthReady(true);
+                        setIsLoading(false); // Authentication complete
+                    });
+
+                    signIn();
+                    return () => unsubscribe();
+                } catch (error) {
+                    console.error("Firebase Initialization Error:", error);
+                    showMessage(`Initialization failed: ${error.message}`, true);
+                    setIsLoading(false);
+                    setIsAuthReady(true);
+                }
+            }, []);
+
+            // 2. FIRESTORE DATA LISTENER (Real-time updates)
+            useEffect(() => {
+                if (!isAuthReady || !db || !userId) return;
+
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                // Define the private collection path: /artifacts/{appId}/users/{userId}/transactions
+                const transactionsColRef = window.firebase.collection(
+                    db,
+                    `artifacts/${appId}/users/${userId}/transactions`
+                );
+
+                const q = window.firebase.query(transactionsColRef);
+
+                setIsLoading(true);
+
+                // Use onSnapshot for real-time data
+                const unsubscribe = window.firebase.onSnapshot(q, (snapshot) => {
+                    const fetchedTransactions = snapshot.docs.map(doc => ({
+                        ...doc.data(),
+                        id: doc.id, // Use Firestore document ID as the unique key
+                        amount: parseFloat(doc.data().amount), // Ensure amount is number
+                    })).sort((a, b) => {
+                        // Sort by date descending (latest first)
+                        if (a.date < b.date) return 1;
+                        if (a.date > b.date) return -1;
+                        return 0;
+                    });
+                    
+                    setTransactions(fetchedTransactions);
+                    setIsLoading(false);
+                }, (error) => {
+                    console.error("Firestore onSnapshot error:", error);
+                    showMessage("Failed to fetch transactions from database.", true);
+                    setIsLoading(false);
+                });
+
+                return () => unsubscribe();
+            }, [isAuthReady, db, userId]);
+
+            // 3. SUMMARY CALCULATION
+            useEffect(() => {
+                const newSummary = transactions.reduce((acc, current) => {
+                    const amount = current.amount || 0; // Already parsed to float in onSnapshot
+                    if (current.type === 'Revenue') {
+                        if (current.allocation === 'Business') acc.businessRevenue += amount;
+                        else acc.personalRevenue += amount;
+                    } else if (current.type === 'Expense') {
+                        if (current.allocation === 'Business') acc.businessExpense += amount;
+                        else acc.personalExpense += amount;
+                    }
+                    return acc;
+                }, { businessRevenue: 0, personalRevenue: 0, businessExpense: 0, personalExpense: 0 });
+                setSummary(newSummary);
+            }, [transactions]);
+
+            // Handlers
+            const handleInputChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => {
+                    let newAllocation = prev.allocation;
+                    let newCategory = prev.category;
+                    let newType = prev.type;
+
+                    if (name === 'type') {
+                        newType = value;
+                        // Reset category if type changes
+                        newCategory = ''; 
+                    } else if (name === 'category') {
+                        newCategory = value;
+                        // Auto-allocate based on new category selection
+                        if (newCategory) {
+                            const isBusiness = categories[newType]?.Business.includes(newCategory);
+                            const isPersonal = categories[newType]?.Personal.includes(newCategory);
+                            if (isBusiness) newAllocation = 'Business';
+                            if (isPersonal) newAllocation = 'Personal';
+                        }
+                    } else if (name === 'allocation') {
+                        newAllocation = value;
+                        // Reset category if allocation changes
+                        newCategory = '';
+                    }
+
+                    return { ...prev, [name]: value, type: newType, category: newCategory, allocation: newAllocation };
+                });
+            };
+
+            const handleAddTransaction = async () => {
+                if (!formData.date || !formData.description || !formData.amount || !formData.category) {
+                    showMessage('Please fill out Date, Description, Category, and Amount.', true);
+                    return;
+                }
+                
+                if (!db || !userId) {
+                     showMessage('Application is still loading or failed to authenticate. Cannot save.', true);
+                     return;
+                }
+
+                const transactionToSave = {
+                    date: formData.date,
+                    description: formData.description,
+                    type: formData.type,
+                    category: formData.category,
+                    allocation: formData.allocation,
+                    amount: parseFloat(formData.amount),
+                    notes: formData.notes,
+                    createdAt: window.firebase.serverTimestamp() // Optional: add timestamp
+                };
+
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const transactionsColRef = window.firebase.collection(
+                    db,
+                    `artifacts/${appId}/users/${userId}/transactions`
+                );
+                
+                try {
+                    await window.firebase.addDoc(transactionsColRef, transactionToSave);
+                    showMessage('Transaction added successfully!', false);
+                    // Clear form after successful addition
+                    setFormData({
+                        date: '', description: '', type: 'Expense', category: '', allocation: 'Business', amount: '', notes: ''
+                    });
+                } catch (error) {
+                    console.error("Error adding document: ", error);
+                    showMessage(`Error adding transaction: ${error.message}`, true);
+                }
+            };
+
+            const handleDeleteTransaction = async (id) => {
+                if (!db || !userId) {
+                    showMessage('Application is not fully loaded. Cannot delete.', true);
+                    return;
+                }
+
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const docRef = window.firebase.doc(
+                    db,
+                    `artifacts/${appId}/users/${userId}/transactions`, 
+                    id
+                );
+                
+                try {
+                    await window.firebase.deleteDoc(docRef);
+                    showMessage('Transaction deleted.', false);
+                } catch (error) {
+                    console.error("Error deleting document: ", error);
+                    showMessage(`Error deleting transaction: ${error.message}`, true);
+                }
+            };
+
+            // Filter/Sort Logic
+            const handleFilterChange = (e) => {
+                const { name, value } = e.target;
+                setFilters(prev => ({ ...prev, [name]: value }));
+            };
+
+            const getFilteredTransactions = useCallback(() => {
+                let filtered = transactions;
+                if (filters.type) filtered = filtered.filter(t => t.type === filters.type);
+                if (filters.allocation) filtered = filtered.filter(t => t.allocation === filters.allocation);
+                if (filters.searchTerm) {
+                    const term = filters.searchTerm.toLowerCase();
+                    filtered = filtered.filter(t => 
+                        t.description.toLowerCase().includes(term) || 
+                        t.notes.toLowerCase().includes(term) ||
+                        t.category.toLowerCase().includes(term)
+                    );
+                }
+                // Data is already sorted by date descending from onSnapshot listener
+                return filtered;
+            }, [transactions, filters]);
+
+
+            const handleExport = () => {
+                const data = getFilteredTransactions();
+                if (data.length === 0) {
+                     showMessage('No data to export!', true);
+                     return;
+                }
+
+                const headers = ['Date', 'Description', 'Type', 'Allocation', 'Category', 'Amount', 'Notes'];
+                const csvContent = "data:text/csv;charset=utf-8," +
+                    headers.join(',') + "\n" +
+                    data.map(t => [
+                        t.date,
+                        `"${t.description.replace(/"/g, '""')}"`,
+                        t.type,
+                        t.allocation,
+                        t.category,
+                        t.amount.toFixed(2),
+                        `"${t.notes.replace(/"/g, '""')}"`
+                    ].join(',')).join('\n');
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "financial_transactions.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showMessage('Export successful!', false);
+            };
+
+            const currentCategories = categories[formData.type]?.[formData.allocation] || [];
+            const displayedTransactions = getFilteredTransactions();
+            const totalNet = (summary.businessRevenue + summary.personalRevenue) - (summary.businessExpense + summary.personalExpense);
+
+            if (isLoading) {
+                 return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+                        <div className="spinner mb-4"></div>
+                        <p className="text-xl font-semibold text-indigo-600">Loading Financial Data...</p>
+                        <p className="text-sm text-gray-500 mt-2">Connecting to Firestore and authenticating user.</p>
+                    </div>
+                );
+            }
+            
+            return (
+                <div className="min-h-screen p-4 sm:p-8 text-gray-800">
+                    <div className="max-w-7xl mx-auto">
+                        <header className="mb-8 flex flex-col items-center">
+                            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-center mb-2 text-indigo-700">
+                                Financial Command Center
+                            </h1>
+                            <p className="text-center text-gray-600 max-w-2xl">
+                                Track expenses and revenue. Logged in as: <span className="font-mono text-indigo-600 text-sm break-all">{userId || 'N/A'}</span>
+                            </p>
+                            <button onClick={() => {
+                                // Replay Tutorial (uses pure JS script)
+                                document.getElementById('onboarding-modal').style.display = 'flex';
+                                document.getElementById('onboarding-modal').style.opacity = '1';
+                            }} className="mt-4 text-sm text-indigo-600 hover:text-indigo-800 underline">
+                                Replay Tutorial
+                            </button>
+                        </header>
+
+                        {/* Summary */}
+                        <section className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 mb-8">
+                            <h2 className="text-2xl font-bold mb-4 text-indigo-600 flex items-center justify-between">
+                                Financial Overview
+                                <span className={`text-xl font-extrabold ${totalNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    NET: ${totalNet.toFixed(2)}
+                                </span>
+                            </h2>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                <SummaryCard title="Business Revenue" amount={summary.businessRevenue} color="blue" />
+                                <SummaryCard title="Personal Revenue" amount={summary.personalRevenue} color="green" />
+                                <SummaryCard title="Business Expense" amount={summary.businessExpense} color="red" />
+                                <SummaryCard title="Personal Expense" amount={summary.personalExpense} color="yellow" />
+                            </div>
+                        </section>
+
+                        {/* Form */}
+                        <section className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 mb-8">
+                            <h2 className="text-2xl font-bold mb-4 text-indigo-600">Add New Transaction</h2>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg w-full focus:ring-indigo-500 focus:border-indigo-500" />
+                                <input type="text" name="description" placeholder="Description (e.g., Flight Training Pay)" value={formData.description} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg w-full col-span-2 md:col-span-1 focus:ring-indigo-500 focus:border-indigo-500" />
+                                
+                                {/* Type Selector */}
+                                <select name="type" value={formData.type} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg w-full focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50">
+                                    <option value="Expense">Expense</option>
+                                    <option value="Revenue">Revenue</option>
+                                </select>
+                                
+                                {/* Allocation Selector (Auto-suggested but editable) */}
+                                <select name="allocation" value={formData.allocation} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg w-full focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50">
+                                    <option value="Business">Business</option>
+                                    <option value="Personal">Personal</option>
+                                </select>
+                                
+                                {/* Category Selector (Filtered by Type/Allocation) */}
+                                <select name="category" value={formData.category} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg w-full focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 col-span-2 md:col-span-1">
+                                    <option value="">Select Category (Required)</option>
+                                    {currentCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                </select>
+                                
+                                {/* Amount Input */}
+                                <input type="number" name="amount" placeholder="Amount (100.00)" value={formData.amount} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg w-full focus:ring-indigo-500 focus:border-indigo-500" />
+                                
+                                {/* Notes */}
+                                <input type="text" name="notes" placeholder="Notes (Optional)" value={formData.notes} onChange={handleInputChange} className="p-3 border border-gray-300 rounded-lg w-full col-span-2 md:col-span-1 focus:ring-indigo-500 focus:border-indigo-500" />
+                                
+                                <button onClick={handleAddTransaction} className="w-full p-3 font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md col-span-2 md:col-span-1 transition-all transform hover:scale-[1.02]">
+                                    Add Transaction
+                                </button>
+                            </div>
+                        </section>
+
+                        {/* Log */}
+                        <section className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100">
+                            <div className="flex flex-wrap items-center justify-between mb-4 gap-4">
+                                <h2 className="text-2xl font-bold text-indigo-600">Transaction Log ({displayedTransactions.length})</h2>
+                                <div className="flex flex-wrap gap-2">
+                                    <input type="text" name="searchTerm" placeholder="Search description/notes..." value={filters.searchTerm} onChange={handleFilterChange} className="p-2 border rounded-lg text-sm flex-1 min-w-[150px]" />
+                                    <select name="type" value={filters.type} onChange={handleFilterChange} className="p-2 border rounded-lg text-sm bg-gray-50">
+                                        <option value="">All Types</option>
+                                        <option value="Revenue">Revenue</option>
+                                        <option value="Expense">Expense</option>
+                                    </select>
+                                    <select name="allocation" value={filters.allocation} onChange={handleFilterChange} className="p-2 border rounded-lg text-sm bg-gray-50">
+                                        <option value="">All Allocations</option>
+                                        <option value="Business">Business</option>
+                                        <option value="Personal">Personal</option>
+                                    </select>
+                                    <button onClick={handleExport} className="p-2 px-4 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors">
+                                        Export CSV
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* No Data Message */}
+                            {displayedTransactions.length === 0 && !isLoading && (
+                                <div className="text-center py-10 text-gray-500 border-2 border-dashed border-gray-200 rounded-xl mt-4">
+                                    <p className="text-lg font-semibold">No transactions found.</p>
+                                    <p>Try adding a new entry or clearing your filters.</p>
+                                </div>
+                            )}
+
+                            {/* Mobile Cards */}
+                            <div className="sm:hidden space-y-3">
+                                {displayedTransactions.map(t => (
+                                    <div key={t.id} className="bg-gray-50 p-4 rounded-xl border relative shadow-sm animate-fade-in-up">
+                                        <button onClick={() => handleDeleteTransaction(t.id)} className="absolute top-2 right-2 text-red-500 hover:text-red-700 transition-colors">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clipRule="evenodd" /></svg>
+                                        </button>
+                                        <p className="font-bold text-gray-900">{t.description}</p>
+                                        <div className="flex justify-between text-sm mt-1">
+                                            <span className="text-gray-500">{t.date}</span>
+                                            <span className={t.type === 'Revenue' ? 'text-green-600 font-extrabold' : 'text-red-600 font-extrabold'}>
+                                                {t.type === 'Expense' ? '-' : ''}${t.amount.toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-indigo-500 mt-1">
+                                            {t.allocation} / {t.category}
+                                        </div>
+                                        {t.notes && <div className="text-xs text-gray-400 italic mt-2">Notes: {t.notes}</div>}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Desktop Table */}
+                            <div className="hidden sm:block overflow-x-auto border rounded-lg">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <TableHeader title="Date" />
+                                            <TableHeader title="Description" />
+                                            <TableHeader title="Type" />
+                                            <TableHeader title="Allocation" />
+                                            <TableHeader title="Category" />
+                                            <TableHeader title="Amount" />
+                                            <TableHeader title="Notes" />
+                                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-10">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {displayedTransactions.map(t => (
+                                            <tr key={t.id} className="hover:bg-indigo-50 transition-colors">
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{t.date}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{t.description}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.type === 'Revenue' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                        {t.type}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-indigo-600">{t.allocation}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600">{t.category}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm font-bold ${t.type === 'Revenue' ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {t.type === 'Expense' ? '-' : ''}${t.amount.toFixed(2)}
+                                                </td>
+                                                <td className="px-4 py-2 text-sm text-gray-500 max-w-xs truncate">{t.notes}</td>
+                                                <td className="px-4 py-2 text-right whitespace-nowrap">
+                                                    <button onClick={() => handleDeleteTransaction(t.id)} className="text-red-600 hover:text-red-900 text-sm font-medium">Delete</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <footer className="mt-8 text-center text-gray-500 text-xs">
+                            <p>Data stored securely with Google Firestore. &copy; 2025</p>
+                        </footer>
+                    </div>
+                </div>
+            );
+        };
+        
+        // Helper Component for Summary Cards
+        const SummaryCard = ({ title, amount, color }) => {
+            let bgColor, borderColor, textColor;
+            if (color === 'blue') { bgColor = 'bg-blue-50'; borderColor = 'border-blue-200'; textColor = 'text-blue-700'; }
+            else if (color === 'green') { bgColor = 'bg-green-50'; borderColor = 'border-green-200'; textColor = 'text-green-700'; }
+            else if (color === 'red') { bgColor = 'bg-red-50'; borderColor = 'border-red-200'; textColor = 'text-red-700'; }
+            else if (color === 'yellow') { bgColor = 'bg-yellow-50'; borderColor = 'border-yellow-200'; textColor = 'text-yellow-700'; }
+
+            return (
+                <div className={`${bgColor} p-4 rounded-xl shadow-inner border ${borderColor}`}>
+                    <p className="text-sm font-medium text-gray-500">{title}</p>
+                    <p className={`text-2xl font-bold ${textColor} mt-1`}>${amount.toFixed(2)}</p>
+                </div>
+            );
+        };
+        
+        // Helper Component for Table Headers
+        const TableHeader = ({ title }) => (
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-indigo-600 transition-colors">
+                {title}
+            </th>
+        );
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
