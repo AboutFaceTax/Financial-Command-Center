@@ -17,30 +17,48 @@
     
     <!-- Firebase Imports -->
     <script type="module">
-        import * as firebase from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import * as auth from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import * as firestore from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // Expose Firebase modules globally for the React script
-        window.firebase = {
-            initializeApp: firebase.initializeApp,
-            getAuth: auth.getAuth,
-            signInAnonymously: auth.signInAnonymously,
-            signInWithCustomToken: auth.signInWithCustomToken,
-            onAuthStateChanged: auth.onAuthStateChanged,
-            getFirestore: firestore.getFirestore,
-            doc: firestore.doc,
-            addDoc: firestore.addDoc,
-            deleteDoc: firestore.deleteDoc,
-            onSnapshot: firestore.onSnapshot,
-            collection: firestore.collection,
-            query: firestore.query,
-            setLogLevel: firestore.setLogLevel,
-            where: firestore.where,
-        };
-        // Set Firebase logging level to debug for development
-        firebase.setLogLevel('Debug');
-    </script>
+  import * as firebase from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import * as auth from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  import * as firestore from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  // --- ADD THIS BLOCK RIGHT HERE ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyD9sBclPLouo2REcC09utlT3Ug37e78i-4",
+    authDomain: "aboutfacetaxgroup-tax-analyzer.firebaseapp.com",
+    projectId: "aboutfacetaxgroup-tax-analyzer",
+    storageBucket: "aboutfacetaxgroup-tax-analyzer.firebasestorage.app",
+    messagingSenderId: "776307363788",
+    appId: "1:776307363788:web:5f3da651ca0d30d9abd769",
+    measurementId: "G-HG0EPGXX9W"
+  };
+
+  // Initialize Firebase
+  const app = firebase.initializeApp(firebaseConfig);
+  const db = firestore.getFirestore(app);
+  const authInstance = auth.getAuth(app);
+  // ----------------------------------
+
+  // Expose globally
+  window.firebase = {
+    initializeApp: firebase.initializeApp,
+    getAuth: auth.getAuth,
+    signInAnonymously: auth.signInAnonymously,
+    signInWithCustomToken: auth.signInWithCustomToken,
+    onAuthStateChanged: auth.onAuthStateChanged,
+    getFirestore: firestore.getFirestore,
+    doc: firestore.doc,
+    addDoc: firestore.addDoc,
+    deleteDoc: firestore.deleteDoc,
+    onSnapshot: firestore.onSnapshot,
+    collection: firestore.collection,
+    query: firestore.query,
+    setDoc: firestore.setDoc,
+    where: firestore.where
+  };
+
+  firebase.setLogLevel('debug');
+</script>
+
     
     <!-- Google Fonts -->
     <style>
